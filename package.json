@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "exceljs": "^4.4.0",
     "next": "^16.4.2",
     "puppeteer": "^25.16.0",

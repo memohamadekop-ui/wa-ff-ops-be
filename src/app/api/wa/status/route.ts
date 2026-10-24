@@ -5,8 +5,8 @@ import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 
-export function GET(request: NextRequest) {
-  const auth = authorizeOcc(request);
+export async function GET(request: NextRequest) {
+  const auth = await authorizeOcc(request);
   if (!auth.ok) return jsonError(auth.status, auth.status === 401 ? "Unauthorized" : "Server configuration error");
   return jsonSuccess(getWhatsAppStatus());
 }

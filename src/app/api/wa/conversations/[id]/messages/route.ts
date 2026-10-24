@@ -18,7 +18,7 @@ export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  const auth = authorizeOcc(request);
+  const auth = await authorizeOcc(request);
   if (!auth.ok) return jsonError(auth.status, auth.status === 401 ? "Unauthorized" : "Server configuration error");
 
   const { id } = await context.params;

@@ -16,7 +16,7 @@ import type { NextRequest } from "next/server";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  const auth = authorizeOcc(request);
+  const auth = await authorizeOcc(request);
   if (!auth.ok) return jsonError(auth.status, auth.status === 401 ? "Unauthorized" : "Server configuration error");
 
   const params = request.nextUrl.searchParams;

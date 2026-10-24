@@ -1,43 +1,46 @@
 # wa-ff-ops-be
 
-Read-only WhatsApp history API and worker. The frontend is maintained separately in `wa-ff-ops`.
+Read-only WhatsApp history API and worker. The static frontend is maintained separately in `wa-ff-ops`.
 
-## Runtime
+## Runtime and setup
 
-Run this service on one persistent Node.js instance with Chrome/Puppeteer support and persistent storage for the linked WhatsApp session. Do not use Firebase Hosting static hosting or a scale-to-zero/serverless deployment for the worker. The OCC/PHP proxy must validate the user's session and superadmin role before forwarding requests to this API.
+Run one instance on a persistent Node.js host with Chrome/Puppeteer support and persistent private storage for the linked WhatsApp session. Firebase Hosting can host the static frontend, but not this worker.
 
-## Local setup
+1. Use Node.js 20 or later.
+2. Copy `.env.example` to `.env`. Configure the server-only Supabase URL/key, `WA_AUTH_TOKEN_SECRET`, exact frontend origins, and independent OCC/worker secrets. Never commit `.env`.
+3. Ensure Supabase `tb_user` is readable with the server-side key and stores Laravel-compatible bcrypt hashes. Login accepts only `role_id = 1`.
+4. Set `WA_HISTORY_AUTH_PATH` to persistent private storage.
+5. Install with `npm install`; install Chrome if needed with `npx puppeteer browsers install chrome`.
+6. Start with `npm run dev`, or build and run with `npm run build` and `npm start`. Keep one worker instance running.
 
-1. Install Node.js 20 or later.
-2. Copy `.env.example` to `.env` and set the server-side Supabase URL/key, OCC shared secret, and worker callback secret. Never commit `.env` or expose secrets in browser code.
-3. Set `WA_HISTORY_AUTH_PATH` to private persistent storage. It contains the linked WhatsApp session.
-4. Install dependencies: `npm install`. Puppeteer may need its compatible Chrome installed: `npx puppeteer browsers install chrome`.
-5. Start development: `npm run dev`. For production, run `npm run build` then `npm start`.
-6. Connect an authorized WhatsApp account via `POST /api/wa/connect`. Retrieve and scan the QR through the protected status API. Only run one worker instance.
+Generate `WA_AUTH_TOKEN_SECRET` with a secure random generator on the backend host. Do not send it to the frontend or chat.
 
-## Environment variables
+## Environment
 
 | Name | Purpose |
 | --- | --- |
 | `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Server-only Supabase key; `SUPABASE_SERVICE_ROLE_KEY` is accepted as a legacy alternative |
-| `OCC_BACKEND_SHARED_SECRET` | Shared secret between the authenticated OCC proxy and this backend |
-| `WA_HISTORY_CALLBACK_SECRET` | Secret used by the internal worker sync endpoint |
-| `WA_HISTORY_AUTH_PATH` | Persistent private directory for WhatsApp session files |
-| `PUPPETEER_EXECUTABLE_PATH` | Optional path to a compatible installed Chrome |
+| `SUPABASE_KEY` | Server-only key; legacy `SUPABASE_SERVICE_ROLE_KEY` is also accepted |
+| `WA_AUTH_TOKEN_SECRET` | Independent server-only signing key (minimum 32 bytes) for one-hour login sessions |
+| `OCC_BACKEND_SHARED_SECRET` | Optional server-to-server OCC authentication |
+| `WA_HISTORY_CALLBACK_SECRET` | Internal worker sync authentication |
+| `WA_HISTORY_ALLOWED_ORIGINS` | Exact comma-separated browser origins; no wildcard |
+| `WA_HISTORY_AUTH_PATH` | Persistent private WhatsApp session directory |
+| `PUPPETEER_EXECUTABLE_PATH` | Optional compatible Chrome executable |
 | `WA_SYNC_INTERVAL_MS` | Automatic sync interval |
-| `WA_SYNC_MESSAGES_PER_CHAT` | Maximum recent messages read from each direct chat per sync |
+| `WA_SYNC_MESSAGES_PER_CHAT` | Recent messages read per direct chat |
 | `WA_SYNC_MAX_CHATS` | Maximum direct chats scanned per sync |
 | `PORT` | HTTP port |
 
-Do not configure `NEXT_PUBLIC_*` secrets. Do not copy `.env` contents into Firebase Hosting or commit them to GitHub.
+## Authentication
 
-## Protected API
+`POST /api/auth/login` accepts email/password over HTTPS. The backend queries `tb_user`, compares the password with bcrypt (including Laravel `$2y$` hashes), and requires `role_id = 1`. It returns a one-hour HMAC-signed bearer token. The frontend keeps this token in session storage; passwords and Supabase keys are never bundled into the frontend. Login attempts are rate-limited.
 
-All OCC routes require `x-occ-backend-secret`. The internal sync route requires `x-wa-worker-secret`.
+The WhatsApp API accepts the signed bearer token or the server-side OCC shared secret. The internal sync endpoint still requires `x-wa-worker-secret`. CORS is restricted to `WA_HISTORY_ALLOWED_ORIGINS`.
 
 | Method | Route |
 | --- | --- |
+| POST | `/api/auth/login` |
 | GET | `/api/wa/status` |
 | POST | `/api/wa/connect` |
 | POST | `/api/wa/disconnect` |
@@ -48,14 +51,13 @@ All OCC routes require `x-occ-backend-secret`. The internal sync route requires 
 | GET | `/api/wa/messages/export?q=text&conversationId=<uuid>` |
 | POST | `/api/internal/wa/sync` |
 
-Message search matches body and external ID. Excel exports include all matches up to 10,000 rows. This service does not include send/reply routes. Group chats and media files are not imported; non-text messages have a metadata/body placeholder.
+Message search matches body and external ID. Excel exports include up to 10,000 matching rows. The API does not provide send/reply operations.
 
-## Security and deployment
+## Security and operations
 
-- Keep this API on a private server network or behind a TLS reverse proxy with strict access controls.
-- The browser must never receive the Supabase key, OCC shared secret, or worker callback secret.
-- Put a same-origin authenticated PHP proxy in front of this API. Validate the OCC session and `role_id = 1`; do not trust browser-supplied role IDs.
-- Persist and protect the WhatsApp auth directory. Ensure only one worker runs because the supplied schema has no unique external-message constraint.
-- Firebase Hosting in the `wa-ff-ops` repository serves the separate static frontend only. It does not run this API or the WhatsApp worker.
-
-The WhatsApp Web library is unofficial and may change behavior or be restricted by WhatsApp. Use only accounts you are authorized to link.
+- Serve the API only over HTTPS.
+- Never expose the Supabase key, OCC secret, worker secret, or session signing key to browser code.
+- Keep the WhatsApp auth directory private and persistent.
+- Run exactly one worker because the supplied schema has no unique constraint for external message IDs.
+- Do not log passwords, login request bodies, WhatsApp QR data, or message contents.
+- The WhatsApp Web library is unofficial and may change behavior or be restricted by WhatsApp. Use only accounts you are authorized to link.

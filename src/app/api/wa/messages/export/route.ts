@@ -41,7 +41,7 @@ function lidIdFromMessage(message: MessageRow) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = authorizeOcc(request);
+  const auth = await authorizeOcc(request);
   if (!auth.ok) {
     return jsonError(
       auth.status,
