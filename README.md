@@ -4,7 +4,7 @@ Read-only WhatsApp history API and worker. The static frontend is maintained sep
 
 ## Runtime and setup
 
-Run one instance on a persistent Node.js host with Chrome/Puppeteer support and persistent private storage for the linked WhatsApp session. Firebase Hosting can host the static frontend, but not this worker.
+Run one instance on Cloud Run or another Node.js host with Chrome/Puppeteer support. Firebase Hosting serves the static frontend and rewrites `/api/**` to this service; it cannot run this worker. Cloud Run's local filesystem is ephemeral, so use Filestore/NFS for the linked WhatsApp session in production.
 
 1. Use Node.js 20 or later.
 2. Copy `.env.example` to `.env`. Configure the server-only Supabase URL/key, `WA_AUTH_TOKEN_SECRET`, exact frontend origins, and independent OCC/worker secrets. Never commit `.env`.
@@ -14,6 +14,33 @@ Run one instance on a persistent Node.js host with Chrome/Puppeteer support and 
 6. Start with `npm run dev`, or build and run with `npm run build` and `npm start`. Keep one worker instance running.
 
 Generate `WA_AUTH_TOKEN_SECRET` with a secure random generator on the backend host. Do not send it to the frontend or chat.
+
+## Deploy to Cloud Run with Firebase Hosting
+
+The Firebase Hosting rewrite in the separate frontend repository targets service `wa-ff-ops-be` in `asia-southeast1`. Enable billing for the Google Cloud/Firebase project and deploy the service before deploying Hosting.
+
+1. Create a Cloud Run service account and grant it access to the required Secret Manager secrets. Create these secrets before deployment: `supabase-key`, `wa-auth-token-secret`, `occ-backend-secret`, and `wa-history-callback-secret`. Store the same values you use in the corresponding `.env` variables; never put secret values in the Docker image or frontend.
+2. From this repository in Cloud Shell, deploy with:
+
+   ```sh
+   gcloud run deploy wa-ff-ops-be \
+     --source . \
+     --region asia-southeast1 \
+     --allow-unauthenticated \
+     --min 1 \
+     --max 1 \
+     --cpu 2 \
+     --memory 4Gi \
+     --no-cpu-throttling \
+     --set-env-vars="^@^SUPABASE_URL=https://YOUR_PROJECT.supabase.co@WA_HISTORY_ALLOWED_ORIGINS=https://wa-ff-ops.web.app,https://wa-ff-ops.firebaseapp.com@WA_HISTORY_AUTH_PATH=/mnt/whatsapp-auth@WA_SYNC_INTERVAL_MS=300000@WA_SYNC_MESSAGES_PER_CHAT=100@WA_SYNC_MAX_CHATS=500" \
+     --set-secrets="SUPABASE_KEY=supabase-key:latest,WA_AUTH_TOKEN_SECRET=wa-auth-token-secret:latest,OCC_BACKEND_SHARED_SECRET=occ-backend-secret:latest,WA_HISTORY_CALLBACK_SECRET=wa-history-callback-secret:latest"
+   ```
+
+   Replace `YOUR_PROJECT` and use the correct Hosting origins. If the project ID differs from `wa-ff-ops`, update the `serviceId`/`region` in the frontend repository's `firebase.json` if needed. The service must allow unauthenticated invocation for Firebase Hosting's server-side rewrite; API routes still enforce application authentication.
+3. For persistent WhatsApp login, create a Filestore NFS share reachable from Cloud Run through a configured VPC. Mount it at `/mnt/whatsapp-auth`; Cloud Run supports NFS volumes with `--add-volume=name=whatsapp-auth,type=nfs,location=FILESTORE_IP:/SHARE_PATH` and `--add-volume-mount=volume=whatsapp-auth,mount-path=/mnt/whatsapp-auth`. Configure the service VPC/network according to the Filestore setup and ensure the share is writable by the container's `node` user (UID 1000). Do not rely on the container's writable filesystem to preserve the QR session.
+4. Deploy Firebase Hosting from the frontend repository: `firebase use wa-ff-ops`, `cd frontend`, `npm install`, `npm run build`, return to the repository root, then `firebase deploy --only hosting`. The frontend defaults to same-origin `/api` requests, which use the rewrite.
+
+The initial deployment command does not configure a Filestore network; complete step 3 before treating the WhatsApp session as persistent. `--min 1` and `--no-cpu-throttling` keep the worker alive and incur ongoing Cloud Run charges. Keep Cloud Run at one instance because the schema does not enforce uniqueness for external message IDs.
 
 ## Environment
 
