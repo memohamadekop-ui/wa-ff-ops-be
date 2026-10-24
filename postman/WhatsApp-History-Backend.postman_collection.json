@@ -1,0 +1,205 @@
+{
+  "info": {
+    "_postman_id": "0fb0bd1e-9135-4af9-9df2-4d8483ad5828",
+    "name": "WhatsApp History Backend",
+    "description": "Requests for the read-only WhatsApp History Next.js backend. Set baseUrl, occBackendSecret, workerSecret, and conversationId before testing. No send/reply endpoint is included.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "occBackendSecret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workerSecret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "conversationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "searchTerm",
+      "value": "transaction-id",
+      "type": "string"
+    },
+    {
+      "key": "syncExternalId",
+      "value": "replace-with-a-unique-whatsapp-message-id",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Connection",
+      "item": [
+        {
+          "name": "Get WhatsApp status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/status",
+            "description": "Returns connection state and QR data when one is available."
+          }
+        },
+        {
+          "name": "Connect or initialize WhatsApp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/connect",
+            "description": "Initializes or recovers the WhatsApp client. The process also starts it automatically at server startup."
+          }
+        },
+        {
+          "name": "Disconnect WhatsApp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/disconnect",
+            "description": "Logs out and disconnects the linked WhatsApp session."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Conversations and messages",
+      "item": [
+        {
+          "name": "List conversations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/conversations?limit=50&offset=0",
+            "description": "Lists conversations, newest activity first. limit must be between 1 and 100."
+          }
+        },
+        {
+          "name": "Search conversations by phone or name",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/conversations?limit=50&offset=0&q={{searchTerm}}",
+            "description": "Searches phone_number and display_name."
+          }
+        },
+        {
+          "name": "List messages in a conversation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/conversations/{{conversationId}}/messages?limit=50&offset=0",
+            "description": "Messages are returned oldest first. Set conversationId to a UUID returned by List conversations."
+          }
+        },
+        {
+          "name": "Search messages in a conversation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/conversations/{{conversationId}}/messages?limit=50&offset=0&q={{searchTerm}}",
+            "description": "Searches body and external_id within one conversation."
+          }
+        },
+        {
+          "name": "Search messages globally",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/messages?limit=50&offset=0&q={{searchTerm}}",
+            "description": "Searches message body and external_id across conversations. Results are newest first."
+          }
+        },
+        {
+          "name": "Export matching messages to Excel",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-occ-backend-secret",
+                "value": "{{occBackendSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wa/messages/export?q={{searchTerm}}",
+            "description": "Downloads all matching messages (up to 10,000 rows) as an .xlsx workbook. Add &conversationId={{conversationId}} to limit the export to one conversation."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Internal worker sync",
+      "item": [
+        {
+          "name": "Submit a sample sync batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-wa-worker-secret",
+                "value": "{{workerSecret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\n      \"conversation_id\": \"{{conversationId}}\",\n      \"message_at\": \"2026-10-23T10:00:00.000Z\",\n      \"direction\": \"inbound\",\n      \"sender_phone\": \"628123456789\",\n      \"sender_name\": \"Example contact\",\n      \"body\": \"Example WhatsApp history message\",\n      \"raw_line\": null,\n      \"source\": \"whatsapp\",\n      \"external_id\": \"{{syncExternalId}}\",\n      \"metadata\": {\n        \"type\": \"chat\",\n        \"hasMedia\": false\n      }\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/internal/wa/sync",
+            "description": "Testing only. conversationId must be an existing conversation UUID. Set syncExternalId to a unique value for each new test; repeating the same external_id is treated as a duplicate."
+          }
+        }
+      ]
+    }
+  ]
+}
