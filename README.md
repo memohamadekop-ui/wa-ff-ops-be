@@ -32,21 +32,15 @@ The Firebase Hosting rewrite in the separate frontend repository targets service
      --cpu 2 \
      --memory 4Gi \
      --no-cpu-throttling \
-     --set-env-vars="^@^SUPABASE_URL=https://YOUR_PROJECT.supabase.co@WA_HISTORY_ALLOWED_ORIGINS=https://wa-ff-ops.web.app,https://wa-ff-ops.firebaseapp.com@WA_HISTORY_AUTH_PATH=/mnt/whatsapp-auth@WA_SYNC_INTERVAL_MS=300000@WA_SYNC_MESSAGES_PER_CHAT=100@WA_SYNC_MAX_CHATS=500" \
+     --set-env-vars="^@^SUPABASE_URL=https://YOUR_PROJECT.supabase.co@WA_HISTORY_ALLOWED_ORIGINS=https://ff-ops-wa-be.web.app,https://ff-ops-wa-be.firebaseapp.com@WA_HISTORY_AUTH_PATH=/mnt/whatsapp-auth@WA_SYNC_INTERVAL_MS=300000@WA_SYNC_MESSAGES_PER_CHAT=100@WA_SYNC_MAX_CHATS=500" \
      --set-secrets="SUPABASE_KEY=supabase-key:latest,WA_AUTH_TOKEN_SECRET=wa-auth-token-secret:latest,OCC_BACKEND_SHARED_SECRET=occ-backend-secret:latest,WA_HISTORY_CALLBACK_SECRET=wa-history-callback-secret:latest"
    ```
 
-   Replace `YOUR_PROJECT` and use the correct Hosting origins. If the project ID differs from `wa-ff-ops`, update the `serviceId`/`region` in the frontend repository's `firebase.json` if needed. The service must allow unauthenticated invocation for Firebase Hosting's server-side rewrite; API routes still enforce application authentication.
+   Replace `YOUR_PROJECT` with the Supabase project ID and use the actual Firebase Hosting origins. Set the active Google Cloud project to your Firebase project's ID before deploying. If the Cloud Run service name or region differs, update the `serviceId`/`region` in the frontend repository's `firebase.json`. The service must allow unauthenticated invocation for Firebase Hosting's server-side rewrite; API routes still enforce application authentication.
 3. For persistent WhatsApp login, create a Filestore NFS share reachable from Cloud Run through a configured VPC. Mount it at `/mnt/whatsapp-auth`; Cloud Run supports NFS volumes with `--add-volume=name=whatsapp-auth,type=nfs,location=FILESTORE_IP:/SHARE_PATH` and `--add-volume-mount=volume=whatsapp-auth,mount-path=/mnt/whatsapp-auth`. Configure the service VPC/network according to the Filestore setup and ensure the share is writable by the container's `node` user (UID 1000). Do not rely on the container's writable filesystem to preserve the QR session.
-4. Deploy Firebase Hosting from the frontend repository: `firebase use wa-ff-ops`, `cd frontend`, `npm install`, `npm run build`, return to the repository root, then `firebase deploy --only hosting`. The frontend defaults to same-origin `/api` requests, which use the rewrite.
+4. In Firebase Console, find the project ID under **Project settings → General**. Deploy Firebase Hosting from the separate frontend repository, selecting that project with `firebase use FIREBASE_PROJECT_ID`, then run its production build and `firebase deploy --only hosting`. Confirm that repository's `firebase.json` rewrites `/api/**` to `wa-ff-ops-be` in `asia-southeast1`. The frontend defaults to same-origin `/api` requests, which use the rewrite.
 
 The initial deployment command does not configure a Filestore network; complete step 3 before treating the WhatsApp session as persistent. `--min 1` and `--no-cpu-throttling` keep the worker alive and incur ongoing Cloud Run charges. Keep Cloud Run at one instance because the schema does not enforce uniqueness for external message IDs.
-
-## Deploy to Vercel
-
-Vercel can host the API routes, and the WhatsApp worker uses the bundled Chromium binary when it detects the Vercel runtime. Set `WA_USE_SERVERLESS_CHROMIUM=1` and the same server-only environment variables listed above in the Vercel project settings. For a temporary session directory, set `WA_HISTORY_AUTH_PATH=/tmp/whatsapp-auth`; Vercel's filesystem is ephemeral, so WhatsApp login state may be lost between invocations.
-
-This is a best-effort setup, not a reliable always-on WhatsApp worker. Vercel Functions can start and stop independently, do not provide durable local session storage, and may freeze background work after responding. WhatsApp connection status and history synchronization can therefore be intermittent even when Chromium starts successfully. Use a persistent, continuously running host for production WhatsApp connectivity.
 
 ## Environment
 
