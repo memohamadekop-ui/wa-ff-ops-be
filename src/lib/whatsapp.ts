@@ -418,9 +418,12 @@ export async function startWhatsApp() {
     positiveInteger("WA_SYNC_INTERVAL_MS", 300_000, 86_400_000);
     positiveInteger("WA_SYNC_MESSAGES_PER_CHAT", 100, 1000);
     positiveInteger("WA_SYNC_MAX_CHATS", 500, 10_000);
+    const workingDirectory = process.cwd();
     const useServerlessChromium =
       process.env.WA_USE_SERVERLESS_CHROMIUM === "1" ||
-      Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.NOW_REGION);
+      Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.NOW_REGION) ||
+      workingDirectory === "/var/task" ||
+      workingDirectory.startsWith("/var/task/");
     const authPath = resolve(
       /* turbopackIgnore: true */
       process.env.WA_HISTORY_AUTH_PATH ??
@@ -431,6 +434,7 @@ export async function startWhatsApp() {
       ConstructorParameters<typeof Client>[0]["puppeteer"]
     > = { headless: true };
     if (useServerlessChromium) {
+      console.info("Using bundled serverless Chromium");
       const { default: chromium } = await import("@sparticuz/chromium");
       puppeteerOptions = {
         args: chromium.args,
