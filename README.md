@@ -42,6 +42,12 @@ The Firebase Hosting rewrite in the separate frontend repository targets service
 
 The initial deployment command does not configure a Filestore network; complete step 3 before treating the WhatsApp session as persistent. `--min 1` and `--no-cpu-throttling` keep the worker alive and incur ongoing Cloud Run charges. Keep Cloud Run at one instance because the schema does not enforce uniqueness for external message IDs.
 
+## Deploy to Vercel
+
+Vercel can host the API routes, and the WhatsApp worker uses the bundled Chromium binary when it detects the Vercel runtime. Set the same server-only environment variables listed above in the Vercel project settings. For a temporary session directory, set `WA_HISTORY_AUTH_PATH=/tmp/whatsapp-auth`; Vercel's filesystem is ephemeral, so WhatsApp login state may be lost between invocations.
+
+This is a best-effort setup, not a reliable always-on WhatsApp worker. Vercel Functions can start and stop independently, do not provide durable local session storage, and may freeze background work after responding. WhatsApp connection status and history synchronization can therefore be intermittent even when Chromium starts successfully. Use a persistent, continuously running host for production WhatsApp connectivity.
+
 ## Environment
 
 | Name | Purpose |

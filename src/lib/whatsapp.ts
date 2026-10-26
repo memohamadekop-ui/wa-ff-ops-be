@@ -420,17 +420,28 @@ export async function startWhatsApp() {
     positiveInteger("WA_SYNC_MAX_CHATS", 500, 10_000);
     const authPath = resolve(
       /* turbopackIgnore: true */
-      process.env.WA_HISTORY_AUTH_PATH ?? "./data/whatsapp-auth",
+      process.env.WA_HISTORY_AUTH_PATH ??
+        (process.env.VERCEL === "1" ? "/tmp/whatsapp-auth" : "./data/whatsapp-auth"),
     );
     await mkdir(authPath, { recursive: true, mode: 0o700 });
+    let puppeteerOptions: NonNullable<
+      ConstructorParameters<typeof Client>[0]["puppeteer"]
+    > = { headless: true };
+    if (process.env.VERCEL === "1") {
+      const { default: chromium } = await import("@sparticuz/chromium");
+      puppeteerOptions = {
+        args: chromium.args,
+        executablePath:
+          process.env.PUPPETEER_EXECUTABLE_PATH ??
+          (await chromium.executablePath()),
+        headless: true,
+      };
+    } else if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      puppeteerOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
     const client = new Client({
       authStrategy: new LocalAuth({ dataPath: authPath }),
-      puppeteer: {
-        headless: true,
-        ...(process.env.PUPPETEER_EXECUTABLE_PATH
-          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
-          : {}),
-      },
+      puppeteer: puppeteerOptions,
     });
     globalState.waClient = client;
     updateState({ status: "starting", qrCode: null, lastError: null });
